@@ -1,0 +1,64 @@
+#!/usr/bin/python3
+
+import sys
+import pprint
+import socketserver
+
+class MyUDPHandler(socketserver.BaseRequestHandler):
+    """
+    This class works similar to the TCP handler class, except that
+    self.request consists of a pair of data and client socket, and since
+    there is no connection the client address must be given explicitly
+    when sending data back via sendto().
+    """
+
+    def handle(self):
+        data = self.request[0].strip()
+        socket = self.request[1]
+        print("{} wrote:".format(self.client_address))
+        print(data)
+        data = data.split(b'\r\n')
+        uri = data.pop(0).split(b' ')
+        headers = dict()
+        for l in data:
+            print(l)
+            key, value = l.split(b':', 1)
+            value = value.strip()
+            headers[key] = value
+
+        pprint.pprint(uri)
+        pprint.pprint(headers)
+
+        uri = 'SIP/2.0 200 OK' 
+        
+        try:
+            del headers[b'Contact']
+        except Exception:
+            pass
+        try:
+            del headers[b'Max-Forwards']
+        except Exception:
+            pass
+#        try:
+#            del headers[b'Via']
+#        except Exception:
+#            pass
+        headers[b'Content-Length'] = b'0'
+        headers[b'User-Agent']     = b'KamTester/1.0'
+
+        pprint.pprint(headers)
+
+        packet = uri + "\r\n" + '\r\n'.join([ "{}: {}".format(k.decode(),v.decode()) for k,v in headers.items() ]) + '\r\n'
+        print(packet)
+        socket.sendto(str.encode(packet), self.client_address)
+        #socket.sendto(data.upper(), self.client_address)
+
+if __name__ == "__main__":
+    #HOST, PORT = "localhost", 10001
+    HOST = "localhost"
+    PORT = int(sys.argv[1])
+    s = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
+    s.serve_forever()
+
+    with socketserver.TCPServer((HOST, PORT), MyUDPHandler) as server:
+        server.serve_forever()
